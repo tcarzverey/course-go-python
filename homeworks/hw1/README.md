@@ -17,8 +17,10 @@
 2. (Опционально) Попробуйте создать свой модуль и поработать с командой go: https://go.dev/doc/tutorial/getting-started
 3. Склонируйте этот репозиторий к себе на устройство
    ```bash
-   git clone TODO/course-go-python
-   cd course-go-python
+   git clone git@github.com:tcarzverey/course-go-python-2025.git # если клонировать осноной репозиторий
+   # или свой форк
+    git clone git@github.com:<youraccount>/course-go-python-2025.git
+   cd course-go-python-2025
    ```
 4. Настройте свою IDE
     1. Goland:
