@@ -11,6 +11,7 @@ func setup() {
 func main() {
 	for {
 		a = "not initialized"
+		done = false
 		go setup()
 		for !done {
 		}
