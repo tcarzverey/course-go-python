@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/tcarzverey/course-go-python-2025/homeworks/hw1/handler/errors"
+	"github.com/tcarzverey/course-go-python/homeworks/hw1/handler/errors"
 )
 
 type dbStub struct {

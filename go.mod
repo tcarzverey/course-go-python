@@ -1,4 +1,4 @@
-module github.com/tcarzverey/course-go-python-2025
+module github.com/tcarzverey/course-go-python
 
 go 1.25.1
 
