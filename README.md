@@ -12,3 +12,9 @@
 * [Презентация](https://docs.google.com/presentation/d/1e_xCM6JOcFC5n87-sU_yl5rCoX1foQHASNJWqXIZYLY/edit?usp=sharing)
 * [Полезные материалы](./materials/lecture2.md)
 * [Домашнее задание](./homeworks/hw1/README.md)
+
+### Занятие 3: API, Протоколы
+Темы: TCP/IP, SOAP, HTTP, REST, gRPC, GraphQL
+* [Презентация](https://docs.google.com/presentation/d/1BtnP6m6C5pz7rfcYV-9K9gSf0hR-57EajhOYKyMdGco/edit?usp=drive_link)
+* [Полезные материалы](./materials/lecture3.md)
+* [Домашнее задание](./homeworks/hw2/README.md)
