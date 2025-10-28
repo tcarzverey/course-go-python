@@ -114,16 +114,16 @@
       `greeting`)
     - Если запрос выполнен успешно - пишем дополнительный заголовок `X-Custom-Result: success`
 
-### 6. Вопросы по заданию
-
-После выполнения надо ответить на вопросы в [questions.md](questions.md)
-
 #### Полезное
 
 1) [http.HandlerFunc](https://pkg.go.dev/net/http#HandleFunc)
    и [http.HandleFunc](https://pkg.go.dev/net/http#HandleFunc)
 2) [json.Marshal](https://pkg.go.dev/encoding/json#Marshal)
    и [json.Unmarshal](https://pkg.go.dev/encoding/json#Unmarshal)
+
+### 6. Вопросы по заданию
+
+После выполнения надо ответить на вопросы в [questions.md](questions.md)
 
 ## Тестирование и запуск
 
