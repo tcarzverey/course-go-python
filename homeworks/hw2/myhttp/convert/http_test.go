@@ -510,7 +510,7 @@ func TestResponseRoundTrip(t *testing.T) {
 				Proto:      "HTTP/1.1",
 				Header: http.Header{
 					"Content-Type":   []string{"application/json"},
-					"Content-Length": []string{"25"},
+					"Content-Length": []string{"22"},
 				},
 				Body: io.NopCloser(strings.NewReader(`{"message": "success"}`)),
 			},
