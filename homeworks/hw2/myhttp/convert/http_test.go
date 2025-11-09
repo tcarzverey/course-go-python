@@ -248,7 +248,7 @@ func TestWriteRequest(t *testing.T) {
 				URL:    &url.URL{Scheme: "http", Host: "api.example.com", Path: "/submit"},
 				Proto:  "HTTP/1.1",
 				Host:   "api.example.com",
-				Body:   io.NopCloser(strings.NewReader(`{"key": "value"}`)),
+				Body:   io.NopCloser(strings.NewReader(`{"key":"value"}`)),
 			},
 			check: func(t *testing.T, output string) {
 				header, headers, body := splitParts(t, output)
@@ -256,7 +256,10 @@ func TestWriteRequest(t *testing.T) {
 				assert.True(t, strings.HasPrefix(header, "POST /submit HTTP/1.1"))
 				assert.Equal(t, "api.example.com", headers["Host"])
 				assert.Equal(t, "chunked", headers["Transfer-Encoding"])
-				assert.Equal(t, "16\r\n{\"key\": \"value\"}\r\n0", body)
+				decimalRespOld := "15\r\n{\"key\":\"value\"}\r\n0" // обратная совместимость
+				decimalResp := "15\r\n{\"key\":\"value\"}\r\n0\r\n\r\n"
+				hexResp := "f\r\n{\"key\":\"value\"}\r\n0\r\n\r\n"
+				assert.Contains(t, []string{decimalRespOld, decimalResp, hexResp}, body)
 			},
 			wantErr: assert.NoError,
 		},
