@@ -1,0 +1,25 @@
+components:
+  schemas:
+    BookingStatus: {type: string, enum: [pending, confirmed, cancelled]}
+    Booking:
+      type: object
+      properties:
+        id: { type: integer }
+        roomId: { type: integer }
+        userId: {type: string}
+        startTime: {type: string, format: date-time}
+        endTime: {type: string, format: date-time}
+        status: {$ref: '#/components/schemas/BookingStatus'}
+    CreateBookingRequest:
+      type: object
+      properties:
+        roomId: { type: integer }
+        userId: {type: string}
+        startTime: {type: string, format: date-time}
+        endTime: {type: string, format: date-time}
+    BookingsListResponse:
+      type: object
+      properties: {items: {type: array, items: {$ref: '#/components/schemas/Booking'}}}
+    Error:
+      type: object
+      properties: {code: {type: string}, message: {type: string}}

@@ -1,0 +1,69 @@
+version: "3.8"
+
+name: bookings
+
+services:
+  bookings:
+    build:
+      dockerfile: build/Dockerfile
+    env_file:
+      .env.docker
+    depends_on:
+      - db-migrator
+    ports:
+      - "8080:8080"
+      - "8083:8083"
+      - "8084:8084"
+
+#  db-migrator:
+#    build:
+#      dockerfile: build/migrate/Dockerfile
+#    command: ["postgresql://hseuser:P@ssw0rd@bookingsdb:5432/bookingsdb", "up"]
+#    depends_on:
+#      - bookingsdb
+
+  db-migrator:
+    image: migrate/migrate
+    depends_on:
+      bookingsdb:
+        condition: service_healthy
+    # путь к миграциям внутри контейнера и строка подключения
+    command:
+      [
+        "-path=/migrations/",
+        "-database=postgres://hseuser:P@ssw0rd@bookingsdb:5432/bookingsdb?sslmode=disable",
+        "up"
+      ]
+    volumes:
+      - ./migrations:/migrations
+    restart: "on-failure"
+
+  bookingsdb:
+    image: postgres:16
+    restart: always
+    environment:
+      - POSTGRES_DB=bookingsdb
+      - POSTGRES_USER=hseuser
+      - POSTGRES_PASSWORD=P@ssw0rd
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    ports:
+      - '6433:5432'
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U hseuser -d bookingsdb" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  jaeger:
+    image: jaegertracing/all-in-one
+    ports:
+      - "14268:14268"
+      - "16686:16686"
+
+
+volumes:
+  db-data:
+    driver: local

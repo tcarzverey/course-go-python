@@ -1,0 +1,6 @@
+summary: Get rooms
+operationId: listRooms
+tags: [rooms]
+responses:
+  '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: ./common.yaml#/components/schemas/Room}}}}}
+  '500': { $ref: '../../common/responses.yaml#/components/responses/500'}

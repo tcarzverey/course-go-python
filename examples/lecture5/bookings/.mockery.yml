@@ -1,0 +1,18 @@
+all: false
+dir: '{{.InterfaceDir}}'
+filename: mockery_mocks_test.go
+force-file-write: true
+formatter: goimports
+generate: true
+include-auto-generated: false
+log-level: info
+structname: '{{.Mock}}{{.InterfaceName}}Mockery'
+pkgname: '{{.SrcPackageName}}'
+recursive: true
+require-template-schema-exists: true
+template: testify
+template-schema: '{{.Template}}.schema.json'
+packages:
+  github.com/tcarzverey/bookings:
+    config:
+      all: true

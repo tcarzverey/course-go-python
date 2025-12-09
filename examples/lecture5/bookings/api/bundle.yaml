@@ -1,0 +1,227 @@
+openapi: 3.0.0
+info:
+  title: Meeting room bookings service
+  description: API для управления переговорками и их бронированиями
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080/
+    description: Dev
+  - url: https://bookings.ru/
+    description: Prod
+paths:
+  /rooms:
+    get:
+      summary: Get rooms
+      operationId: listRooms
+      tags:
+        - rooms
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Room'
+        '500':
+          $ref: '#/components/responses/500'
+    post:
+      summary: Create room
+      operationId: createRoom
+      tags:
+        - rooms
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRoomRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Room'
+  /rooms/free:
+    get:
+      summary: Free slots
+      operationId: listFreeSlots
+      tags:
+        - rooms
+      parameters:
+        - name: room_ids
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              type: integer
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FreeSlotsResponse'
+  /bookings:
+    get:
+      summary: Get bookings
+      operationId: listBookings
+      tags:
+        - bookings
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingsListResponse'
+    post:
+      summary: Create booking
+      operationId: createBooking
+      tags:
+        - bookings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBookingRequest'
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+  /bookings/{id}/cancel:
+    post:
+      summary: Cancel booking
+      operationId: cancelBooking
+      tags:
+        - bookings
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+components:
+  schemas:
+    Room:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        capacity:
+          type: integer
+    Error:
+      type: object
+      properties:
+        logicCode:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+      required:
+        - message
+    CreateRoomRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        capacity:
+          type: integer
+      required:
+        - name
+        - capacity
+    FreeSlot:
+      type: object
+      properties:
+        roomId:
+          type: integer
+        roomName:
+          type: string
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+    FreeSlotsResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/FreeSlot'
+    BookingStatus:
+      type: string
+      enum:
+        - pending
+        - confirmed
+        - cancelled
+    Booking:
+      type: object
+      properties:
+        id:
+          type: integer
+        roomId:
+          type: integer
+        userId:
+          type: string
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        status:
+          $ref: '#/components/schemas/BookingStatus'
+    BookingsListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Booking'
+    CreateBookingRequest:
+      type: object
+      properties:
+        roomId:
+          type: integer
+        userId:
+          type: string
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+  responses:
+    '500':
+      description: Internal error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

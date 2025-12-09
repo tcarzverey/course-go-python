@@ -1,0 +1,10 @@
+summary: Create room
+operationId: createRoom
+tags: [rooms]
+requestBody:
+  required: true
+  content:
+    application/json:
+      schema: {$ref: ./common.yaml#/components/schemas/CreateRoomRequest}
+responses:
+  '201': {description: Created, content: {application/json: {schema: {$ref: ./common.yaml#/components/schemas/Room}}}}

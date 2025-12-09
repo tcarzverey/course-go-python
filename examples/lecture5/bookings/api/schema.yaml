@@ -1,0 +1,20 @@
+openapi: 3.0.0
+info:
+  title: Meeting room bookings service
+  description: API для управления переговорками и их бронированиями
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080/
+    description: Dev
+  - url: https://bookings.ru/
+    description: Prod
+
+paths:
+  /rooms:
+    $ref: ./paths/rooms/index.yaml
+  /rooms/free:
+    $ref: ./paths/rooms/free.index.yaml
+  /bookings:
+    $ref: ./paths/bookings/index.yaml
+  /bookings/{id}/cancel:
+    $ref: ./paths/bookings/cancel.index.yaml

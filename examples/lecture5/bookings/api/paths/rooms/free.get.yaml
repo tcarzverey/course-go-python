@@ -1,0 +1,9 @@
+summary: Free slots
+operationId: listFreeSlots
+tags: [ rooms ]
+parameters:
+  - { name: room_ids, in: query, required: false, schema: { type: array, items: { type: integer } } }
+  - { name: from, in: query, required: true, schema: { type: string, format: date-time} }
+  - { name: to, in: query, required: true, schema: { type: string, format: date-time } }
+responses:
+  '200': { content: { application/json: { schema: { $ref: ./common.yaml#/components/schemas/FreeSlotsResponse } } } }

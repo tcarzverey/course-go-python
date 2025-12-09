@@ -1,0 +1,5 @@
+summary: Get bookings
+operationId: listBookings
+tags: [bookings]
+responses:
+  '200': {content: {application/json: {schema: {$ref: ./common.yaml#/components/schemas/BookingsListResponse}}}}

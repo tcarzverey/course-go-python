@@ -1,0 +1,19 @@
+openapi: 3.0.0
+info:
+  title: Errors
+  version: 1.0.0
+paths: {}
+
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        logicCode:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+      required:
+        - message

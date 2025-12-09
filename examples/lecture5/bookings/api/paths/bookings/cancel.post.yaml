@@ -1,0 +1,7 @@
+summary: Cancel booking
+operationId: cancelBooking
+tags: [bookings]
+parameters:
+  - {name: id, in: path, required: true, schema: { type: integer }}
+responses:
+  '200': {content: {application/json: {schema: {$ref: ./common.yaml#/components/schemas/Booking}}}}

@@ -1,0 +1,10 @@
+summary: Create booking
+operationId: createBooking
+tags: [bookings]
+requestBody:
+  required: true
+  content:
+    application/json:
+      schema: {$ref: ./common.yaml#/components/schemas/CreateBookingRequest}
+responses:
+  '201': {content: {application/json: {schema: {$ref: ./common.yaml#/components/schemas/Booking}}}}

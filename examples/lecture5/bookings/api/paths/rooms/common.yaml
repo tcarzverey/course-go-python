@@ -1,0 +1,22 @@
+components:
+  schemas:
+    Room:
+      type: object
+      properties: { id: { type: integer }, name: { type: string }, capacity: { type: integer } }
+    CreateRoomRequest:
+      type: object
+      properties: { name: { type: string }, capacity: { type: integer } }
+      required: [ name, capacity ]
+    FreeSlot:
+      type: object
+      properties:
+        roomId: { type: integer }
+        roomName: { type: string }
+        startTime: { type: string, format: date-time }
+        endTime: { type: string, format: date-time }
+    FreeSlotsResponse:
+      type: object
+      properties: { items: { type: array, items: { $ref: '#/components/schemas/FreeSlot' } } }
+    Error:
+      type: object
+      properties: { code: { type: string }, message: { type: string } }
