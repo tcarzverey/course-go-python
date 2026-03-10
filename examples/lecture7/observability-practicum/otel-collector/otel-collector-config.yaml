@@ -38,6 +38,8 @@ exporters:
   prometheus:
     endpoint: "0.0.0.0:8889"
     namespace: "otelcol"
+    resource_to_telemetry_conversion:
+      enabled: true   # converts service.name → service_name label
 
   debug:
     verbosity: basic

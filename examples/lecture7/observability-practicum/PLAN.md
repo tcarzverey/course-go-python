@@ -231,7 +231,7 @@ url-shortener-http          [5ms]   ← добавил otelhttp (step4)
 
 Спаны теперь вложены — `otelhttp` создаёт родительский span, наши ручные становятся дочерними автоматически через context propagation.
 
-**Prometheus:** метрика `http_server_request_duration_seconds` из коллектора `:8889`.
+**Prometheus:** метрика `otelcol_http_server_request_duration_seconds` из коллектора `:8889`.
 
 **Ключевое отличие от step3:**
 На step3 мы писали инструментацию руками и видели только бизнес-логику.
@@ -300,7 +300,7 @@ if span := trace.SpanFromContext(r.Context()); span.SpanContext().IsValid() {
 logger.InfoContext(ctx, "http request", ..., "trace_id", traceID)
 ```
 
-`otelhttp` (step3) уже добавил span в контекст каждого запроса.
+`otelhttp` (step4) уже добавил span в контекст каждого запроса.
 step6 читает его `trace_id` и вкладывает в лог-запись — получается связь между Loki и Tempo.
 
 **На что смотреть:**
@@ -450,7 +450,6 @@ url-shortener-http              [10ms]
 │  url-shortener ──HTTP──► stats-service                  │
 │                                                         │
 │  OTel SDK: traces + logs + metrics (OTLP/gRPC push)     │
-│  Prometheus client_golang: /metrics endpoint (pull)     │
 └─────────────────────┬───────────────────────────────────┘
                       │ OTLP/gRPC
                       ▼
@@ -481,30 +480,31 @@ url-shortener-http              [10ms]
 
 ```promql
 # RPS по методу и пути
-rate(http_requests_total{job="url-shortener"}[1m])
+rate(otelcol_http_server_request_duration_seconds_count{service_name="url-shortener"}[1m])
 
 # p99 latency по пути
-histogram_quantile(0.99, sum by (path, le) (
-  rate(http_request_duration_seconds_bucket{job="url-shortener"}[1m])
+histogram_quantile(0.99, sum by (http_route, le) (
+  rate(otelcol_http_server_request_duration_seconds_bucket{service_name="url-shortener"}[1m])
 ))
 
 # Error rate (5xx)
-rate(http_requests_total{job="url-shortener", status=~"5.."}[5m])
-/ rate(http_requests_total{job="url-shortener"}[5m])
+rate(otelcol_http_server_request_duration_seconds_count{service_name="url-shortener", http_response_status_code=~"5.."}[5m])
+/ rate(otelcol_http_server_request_duration_seconds_count{service_name="url-shortener"}[5m])
 ```
 
 ## Полезные LogQL запросы (Loki)
 
 ```logql
 # Все логи сервиса
-{service="url-shortener"}
+{service_name="url-shortener"}
 
-# Только ошибки
-{service="url-shortener"} | json | level="error"
+# Только предупреждения и ошибки
+{service_name="url-shortener"} | json | severity="WARN"
+{service_name="url-shortener"} | json | severity="ERROR"
 
 # Медленные запросы (если добавить duration в лог)
-{service="url-shortener"} | json | duration > 100ms
+{service_name="url-shortener"} | json | duration > 100ms
 
 # Найти лог по trace_id
-{service="url-shortener"} | json | trace_id="4bf92f3577b34da6a3ce929d0e0e4736"
+{service_name="url-shortener"} | json | trace_id="4bf92f3577b34da6a3ce929d0e0e4736"
 ```

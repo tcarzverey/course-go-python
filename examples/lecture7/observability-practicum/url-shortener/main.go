@@ -9,7 +9,7 @@ import (
 	"os"
 
 	"github.com/observability-practicum/url-shortener/internal/telemetry"
-	// step4 "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	// step5 "go.opentelemetry.io/contrib/bridges/otelslog"
 
 	"github.com/observability-practicum/url-shortener/internal/handler"
@@ -65,10 +65,10 @@ func main() {
 	// ── Middleware chain (outermost runs first) ───────────────────────────────
 	var root http.Handler = mux
 
-	// step4 // OTel HTTP middleware: automatic span + HTTP metrics for the whole HTTP layer.
-	// step4 root = otelhttp.NewHandler(root, "url-shortener-http",
-	// step4 	otelhttp.WithMessageEvents(otelhttp.ReadEvents, otelhttp.WriteEvents),
-	// step4 )
+	// OTel HTTP middleware: automatic span + HTTP metrics for the whole HTTP layer.
+	root = otelhttp.NewHandler(root, "url-shortener-http",
+		otelhttp.WithMessageEvents(otelhttp.ReadEvents, otelhttp.WriteEvents),
+	)
 
 	root = middleware.Logging(logger)(root) // step5 activates log output
 
