@@ -1,0 +1,21 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # url-shortener exposes /metrics at step2+
+  - job_name: "url-shortener"
+    static_configs:
+      - targets: ["url-shortener:8080"]
+    metrics_path: /metrics
+
+  # step7 # stats-service metrics (add at step7)
+  # step7 - job_name: "stats-service"
+  # step7   static_configs:
+  # step7     - targets: ["stats-service:8081"]
+  # step7   metrics_path: /metrics
+
+  # OpenTelemetry Collector self-metrics
+  - job_name: "otel-collector"
+    static_configs:
+      - targets: ["otel-collector:8889"]

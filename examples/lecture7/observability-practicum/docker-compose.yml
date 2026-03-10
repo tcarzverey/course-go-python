@@ -1,0 +1,148 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Observability Practicum — Docker Compose
+#
+# Services:
+#   url-shortener  — main Go service (always up)
+#   stats-service  — secondary Go service (step7: distributed tracing)
+#   prometheus     — metrics storage & scraper
+#   grafana        — dashboards for metrics, logs, traces
+#   loki           — log aggregation backend
+#   promtail       — log shipper (reads Docker container logs → Loki)
+#   tempo          — distributed tracing backend (OTLP receiver)
+#   otel-collector — OpenTelemetry Collector (receives OTLP, fans out)
+# ─────────────────────────────────────────────────────────────────────────────
+
+networks:
+  observability:
+    driver: bridge
+
+volumes:
+  prometheus_data: {}
+  grafana_data: {}
+  loki_data: {}
+  tempo_data: {}
+
+services:
+
+  # ── Application Services ───────────────────────────────────────────────────
+
+  url-shortener:
+    build:
+      context: ./url-shortener
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      BASE_URL: "http://localhost:8080"
+      # step5 OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector:4317"
+      # step7 STATS_SERVICE_URL: "http://stats-service:8081"
+    networks:
+      - observability
+    restart: unless-stopped
+    depends_on:
+      - otel-collector  # step5: uncomment when adding tracing
+
+  # step7 stats-service:
+  # step7   build:
+  # step7     context: ./stats-service
+  # step7     dockerfile: Dockerfile
+  # step7   ports:
+  # step7     - "8081:8081"
+  # step7   environment:
+  # step7     PORT: "8081"
+  # step7     OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector:4317"
+  # step7   networks:
+  # step7     - observability
+  # step7   restart: unless-stopped
+  # step7   depends_on:
+  # step7     - otel-collector
+
+  # ── Observability Stack ────────────────────────────────────────────────────
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    networks:
+      - observability
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: "admin"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - observability
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.3.2
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki/loki-config.yaml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - observability
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:3.3.2
+    volumes:
+      - ./promtail/promtail-config.yaml:/etc/promtail/config.yaml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: -config.file=/etc/promtail/config.yaml
+    networks:
+      - observability
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    ports:
+      - "3200:3200"   # Tempo HTTP API
+      - "4318:4318"   # OTLP HTTP (direct, for reference)
+    volumes:
+      - ./tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo_data:/var/tempo
+    command: -config.file=/etc/tempo/tempo.yaml
+    networks:
+      - observability
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.115.1
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "8889:8889"   # Prometheus metrics (collector self-metrics)
+    volumes:
+      - ./otel-collector/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    networks:
+      - observability
+    depends_on:
+      - tempo
+      - loki
+    restart: unless-stopped

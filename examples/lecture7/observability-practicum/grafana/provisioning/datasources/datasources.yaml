@@ -1,0 +1,36 @@
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      timeInterval: "15s"
+
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      derivedFields:
+        # Automatically create a link from trace_id log field to the Tempo trace
+        - matcherRegex: '"trace_id":"([a-f0-9]+)"'
+          name: TraceID
+          url: "$${__value.raw}"
+          datasourceUid: tempo_uid
+          urlDisplayLabel: "View Trace in Tempo"
+
+  - name: Tempo
+    type: tempo
+    uid: tempo_uid
+    access: proxy
+    url: http://tempo:3200
+    jsonData:
+      serviceMap:
+        datasourceUid: prometheus_uid
+      nodeGraph:
+        enabled: true
+      lokiSearch:
+        datasourceUid: loki_uid
