@@ -65,12 +65,13 @@ func main() {
 	// ── Middleware chain (outermost runs first) ───────────────────────────────
 	var root http.Handler = mux
 
-	// OTel HTTP middleware: automatic span + HTTP metrics for the whole HTTP layer.
+	root = middleware.Logging(logger)(root) // step5 activates log output
+
+	// OTel HTTP middleware: outermost — creates span and injects it into context
+	// before Logging runs, so trace_id is available in r.Context() inside Logging.
 	root = otelhttp.NewHandler(root, "url-shortener-http",
 		otelhttp.WithMessageEvents(otelhttp.ReadEvents, otelhttp.WriteEvents),
 	)
-
-	root = middleware.Logging(logger)(root) // step5 activates log output
 
 	// ── Start server ──────────────────────────────────────────────────────────
 	addr := fmt.Sprintf(":%s", port)

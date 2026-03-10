@@ -11,24 +11,42 @@
       "title": "Request Rate (req/s)",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps" },
+        "overrides": []
+      },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus_uid" },
           "expr": "rate(otelcol_http_server_request_duration_seconds_count{service_name=\"url-shortener\"}[1m])",
-          "legendFormat": "{{http_request_method}} {{http_route}} {{http_response_status_code}}"
+          "legendFormat": "{{http_request_method}} {{http_route}} → {{http_response_status_code}}"
         }
       ]
     },
     {
       "id": 2,
-      "title": "Request Latency P99 (s)",
+      "title": "Request Latency (s)",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": {
+        "defaults": { "unit": "s" },
+        "overrides": []
+      },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus_uid" },
-          "expr": "histogram_quantile(0.99, rate(otelcol_http_server_request_duration_seconds_bucket{service_name=\"url-shortener\"}[1m]))",
-          "legendFormat": "p99 {{http_route}}"
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(otelcol_http_server_request_duration_seconds_bucket{service_name=\"url-shortener\"}[1m])))",
+          "legendFormat": "p50"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus_uid" },
+          "expr": "histogram_quantile(0.90, sum by (le) (rate(otelcol_http_server_request_duration_seconds_bucket{service_name=\"url-shortener\"}[1m])))",
+          "legendFormat": "p90"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus_uid" },
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(otelcol_http_server_request_duration_seconds_bucket{service_name=\"url-shortener\"}[1m])))",
+          "legendFormat": "p99"
         }
       ]
     },
