@@ -21,6 +21,12 @@ exporters:
     tls:
       insecure: true
 
+  # Forward traces to Jaeger (same traces, second backend)
+  otlp/jaeger:
+    endpoint: "jaeger:4317"
+    tls:
+      insecure: true
+
   # Forward logs to Loki
   loki:
     endpoint: "http://loki:3100/loki/api/v1/push"
@@ -41,7 +47,7 @@ service:
     traces:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [otlp/tempo, debug]
+      exporters: [otlp/tempo, otlp/jaeger, debug]
 
     logs:
       receivers: [otlp]

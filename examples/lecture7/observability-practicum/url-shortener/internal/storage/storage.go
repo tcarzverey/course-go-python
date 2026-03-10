@@ -16,18 +16,26 @@ type URLRecord struct {
 	Clicks      int64
 }
 
-type Storage struct {
+// Store is the storage interface used by all handler code.
+// Implementations: MemoryStorage (steps 0–7), PGXStorage (step8).
+type Store interface {
+	Save(originalURL string) (string, error)
+	Get(code string) (*URLRecord, error)
+	IncrementClicks(code string) error
+}
+
+type MemoryStorage struct {
 	mu   sync.RWMutex
 	urls map[string]*URLRecord
 }
 
-func New() *Storage {
-	return &Storage{
+func New() Store {
+	return &MemoryStorage{
 		urls: make(map[string]*URLRecord),
 	}
 }
 
-func (s *Storage) Save(originalURL string) (string, error) {
+func (s *MemoryStorage) Save(originalURL string) (string, error) {
 	code := generateCode()
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -39,7 +47,7 @@ func (s *Storage) Save(originalURL string) (string, error) {
 	return code, nil
 }
 
-func (s *Storage) Get(code string) (*URLRecord, error) {
+func (s *MemoryStorage) Get(code string) (*URLRecord, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	r, ok := s.urls[code]
@@ -49,12 +57,13 @@ func (s *Storage) Get(code string) (*URLRecord, error) {
 	return r, nil
 }
 
-func (s *Storage) IncrementClicks(code string) {
+func (s *MemoryStorage) IncrementClicks(code string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if r, ok := s.urls[code]; ok {
 		r.Clicks++
 	}
+	return nil
 }
 
 const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"

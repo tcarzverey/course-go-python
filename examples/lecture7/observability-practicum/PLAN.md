@@ -40,6 +40,7 @@ Prometheus     (port 9090)
 Grafana        (port 3000)  — логин admin / admin
 Loki           (port 3100)
 Tempo          (port 3200)
+Jaeger         (port 16686) — альтернативный трейс-backend
 OTel Collector (port 4317)
 ```
 
@@ -112,107 +113,103 @@ docker compose up -d
 │  Go сервис                                  │
 │  url-shortener :8080                        │
 └──────────┬──────────────────────────────────┘
+           │ OTLP/gRPC (traces + logs + metrics)
+           ▼
+    OTel Collector :4317
            │
-    ┌──────┴──────┐
-    │             │
-    ▼             ▼
-Prometheus    OTel Collector :4317
- :9090        (step5: traces/logs)
-    │             │
-    ▼             ├──► Tempo :3200  (traces)
-  Grafana         └──► Loki  :3100  (logs)
-  :3000  ◄──────────────────────────────────
+           ├──► Tempo   :3200  (traces)
+           ├──► Jaeger  :16686 (traces)
+           ├──► Loki    :3100  (logs)
+           └──► :8889          (metrics, Prometheus scrapes)
+                │
+           Prometheus :9090
+                │
+           Grafana :3000
 ```
 
 **Откройте в браузере:**
 - Grafana: http://localhost:3000 (admin/admin)
 - Prometheus: http://localhost:9090
+- Jaeger UI: http://localhost:16686
 
 **На что смотреть:**
 - В Grafana видны пустые datasources — Prometheus, Loki, Tempo
 - Prometheus → Status → Targets: url-shortener пока `DOWN` (нет /metrics)
+- Jaeger UI — пустой список сервисов, ждёт трейсов (появятся с step5)
 - Готовая инфраструктура ждёт данных от нашего сервиса
+
+**Jaeger vs Tempo:**
+OTel Collector шлёт трейсы одновременно в оба backend'а.
+Tempo — интегрирован с Grafana (correlation с логами).
+Jaeger — standalone UI, удобен для быстрого просмотра и поиска трейсов без Grafana.
+С step5 и далее трейсы видны в обоих местах.
 
 ---
 
-### 📊 Шаг 2 — Ручные метрики Prometheus
+### 📡 Шаг 2 — OTel SDK (все три сигнала)
 
-**Активировать:** найти `// step2 ` → заменить на ``, затем `docker compose up --build -d`.
+**Активировать:** найти `// step2 ` → заменить на ``, перебилдить.
 
-**Что добавляется в `main.go`:**
-- Эндпоинт `GET /metrics` через `promhttp.Handler()`
+**Что добавляется:** `telemetry.Init` в `main.go` — одним вызовом поднимаются все три провайдера:
 
-**Что добавляется в `handler.go` (ручная инструментация):**
 ```go
-// В handler.Shorten — считаем созданные ссылки
-shortenTotal.Inc()
-
-// В handler.Redirect — считаем клики и измеряем время
-redirectsTotal.Inc()
-timer := prometheus.NewTimer(redirectDuration)
-defer timer.ObserveDuration()
+shutdown, err := telemetry.Init(ctx, "url-shortener", otlpEndpoint)
+defer func() { _ = shutdown(context.Background()) }()
 ```
 
-**Проверяем:**
-```bash
-curl http://localhost:8080/metrics | grep http_
-# Prometheus: http://localhost:9090 → Graph → http_requests_total
+Внутри `telemetry.Init` (`internal/telemetry/telemetry.go`):
+```
+gRPC conn → OTel Collector :4317
+    ├── TracerProvider  → traces  → Tempo / Jaeger
+    ├── MeterProvider   → metrics → Prometheus (через Collector :8889)
+    └── LoggerProvider  → logs    → Loki
 ```
 
 **На что смотреть:**
-- Prometheus → Status → Targets → url-shortener = **UP**
-- `http_requests_total` — счётчик по методам и статусам
-- `http_request_duration_seconds` — гистограмма latency
-- В Grafana → Dashboards → Practicum → URL Shortener: первые графики оживают
+- Prometheus → Status → Targets → `otel-collector` = **UP** (метрики приложения придут на step3)
+- Tempo / Jaeger — пустые (трейсы придут на step3 через otelhttp)
+- Loki — пустой (логи придут на step4 через otelslog)
 
-**Проблема ручной инструментации:**
-Каждый новый хэндлер нужно инструментировать вручную. Легко забыть.
+**Ключевое отличие от ручного подхода:**
+Никакого `/metrics` эндпоинта — сервис сам *пушит* данные в коллектор по gRPC.
 
 ---
 
-### 🔧 Шаг 3 — Метрики через middleware (автоматически)
+### 🔧 Шаг 3 — OTel HTTP middleware (автоматические спаны и метрики)
 
 **Активировать:** найти `// step3 ` → заменить на ``, перебилдить.
 
-**Что добавляется в `middleware/middleware.go`:**
+**Что добавляется в `main.go`:**
 ```go
-func Metrics(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        start := time.Now()
-        rw := newResponseWriter(w)    // захватываем status code
-        next.ServeHTTP(rw, r)
-
-        httpRequestsTotal.WithLabelValues(r.Method, r.URL.Path, strconv.Itoa(rw.status)).Inc()
-        httpRequestDurationSeconds.WithLabelValues(r.Method, r.URL.Path).Observe(time.Since(start).Seconds())
-    })
-}
+root = otelhttp.NewHandler(root, "url-shortener-http",
+    otelhttp.WithMessageEvents(otelhttp.ReadEvents, otelhttp.WriteEvents),
+)
 ```
 
-**Middleware подключён в `main.go`:**
-```go
-root = middleware.Metrics(root)  // оборачивает весь mux
-```
+`otelhttp` использует уже инициализированные глобальные провайдеры (step2) и автоматически:
+- Создаёт **span** для каждого HTTP-запроса (`url-shortener-http`)
+- Записывает **метрики**: `http.server.request.duration` (гистограмма latency), `http.server.active_requests`
 
 **На что смотреть:**
-- Метрики те же, но теперь **любой новый эндпоинт** получает их автоматически
-- Попробуйте добавить хэндлер без единой строки метрик — данные всё равно появятся
-- Grafana: `rate(http_requests_total[1m])` — живой трафик
-- Grafana: `histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[1m]))` — p99 latency
+- Tempo / Jaeger: появились трейсы, каждый запрос — отдельный span
+- Prometheus → метрика `http_server_request_duration_seconds` (из коллектора :8889)
+- Попробуйте добавить новый хэндлер — он автоматически получит трейс и метрики
 
 **Паттерн:**
-Middleware = единственное место для сквозной логики.
-Всё что нужно сделать для всех запросов — делаем здесь.
+Одна строка кода → полная observability для всего HTTP-слоя.
 
 ---
 
-### 📝 Шаг 4 — Структурированные логи (slog + Loki)
+### 📝 Шаг 4 — Структурированные логи (slog + OTel bridge)
 
 **Активировать:** найти `// step4 ` → заменить на ``, перебилдить.
+> ⚠️ Требует step5: логи идут через OTel LoggerProvider, который инициализируется на step5.
+> Активируй оба шага вместе: `// step4 ` и `// step5 ` → ``.
 
 **Что добавляется:**
-1. В `main.go` — JSON handler для slog:
+1. В `main.go` — OTel-backed slog через bridge:
 ```go
-logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+logger = slog.New(otelslog.NewHandler("url-shortener"))
 slog.SetDefault(logger)
 ```
 
@@ -232,25 +229,25 @@ h.logger.InfoContext(r.Context(), "URL shortened", "code", code, "original_url",
 h.logger.WarnContext(ctx, "code not found", "code", code)
 ```
 
+**Как это работает:**
+```
+slog.Logger (otelslog.NewHandler)
+    → OTel LoggerProvider (global, set by InitLogProvider)
+        → OTel Collector :4317 (OTLP/gRPC)
+            → Loki
+```
+
 **Проверяем:**
 ```bash
-# Логи в stdout контейнера
-docker compose logs url-shortener -f
-
 # В Grafana → Explore → Loki:
-{service="url-shortener"}
-{service="url-shortener"} | json | level="warn"
-{service="url-shortener"} | json | path="/shorten"
+{service_name="url-shortener"}
+{service_name="url-shortener"} | json | severity="WARN"
 ```
 
 **На что смотреть:**
-- Каждая строка лога — валидный JSON с полями `time`, `level`, `msg`, `method`, `path`, `status`
-- В Loki можно фильтровать по любому полю: `| json | status=500`
-- Promtail автоматически читает логи из Docker и шлёт в Loki
-
-**Почему JSON?**
-Структурированные логи можно парсить, индексировать и искать.
-Неструктурированный текст (`log.Printf`) в Loki — просто строка.
+- Логи приходят в Loki через OTel Collector, а не через Promtail
+- Каждая запись содержит structured attributes: `method`, `path`, `status`
+- `service_name` проставляется автоматически из OTel Resource
 
 ---
 
@@ -312,20 +309,11 @@ curl http://localhost:8080/<code>
 
 ---
 
-### ⚡ Шаг 6 — OTel HTTP Middleware + корреляция логов
+### 🔗 Шаг 6 — Корреляция логов и трейсов
 
 **Активировать:** найти `// step6 ` → заменить на ``, перебилдить.
 
-**Что добавляется:**
-
-`main.go` — OTel HTTP middleware от contrib:
-```go
-root = otelhttp.NewHandler(root, "url-shortener-http",
-    otelhttp.WithMessageEvents(otelhttp.ReadEvents, otelhttp.WriteEvents),
-)
-```
-
-`middleware/middleware.go` — добавляем trace_id в каждый лог:
+**Что добавляется в `middleware/middleware.go`:**
 ```go
 if span := trace.SpanFromContext(r.Context()); span.SpanContext().IsValid() {
     traceID = span.SpanContext().TraceID().String()
@@ -333,22 +321,19 @@ if span := trace.SpanFromContext(r.Context()); span.SpanContext().IsValid() {
 logger.InfoContext(ctx, "http request", ..., "trace_id", traceID)
 ```
 
+`otelhttp` (step3) уже добавил span в контекст каждого запроса.
+step6 читает его `trace_id` и вкладывает в лог-запись — получается связь между Loki и Tempo.
+
 **На что смотреть:**
 
-1. **Tempo:** Теперь у каждого трейса есть корневой span `url-shortener-http`
-   с атрибутами `http.method`, `http.url`, `http.status_code`, `http.flavor`
-
-2. **Loki + Tempo correlation:**
-   Grafana → Explore → Loki → `{service="url-shortener"} | json`
-   Кликните на лог-строку → в поле `trace_id` появится кнопка **"View Trace in Tempo"**
-   → прямой переход к трейсу!
-
-3. **Grafana Dashboard:**
-   Метрики + логи + трейсы в одном месте для одного запроса.
+**Loki + Tempo correlation:**
+Grafana → Explore → Loki → `{service_name="url-shortener"}`
+Кликните на лог-строку → в поле `trace_id` появится кнопка **"View Trace in Tempo"**
+→ прямой переход к трейсу!
 
 **Ключевой паттерн:**
 `trace_id` в логах = мост между Loki и Tempo.
-Один идентификатор связывает всё: метрики по времени, лог-строки, полный путь запроса.
+Один идентификатор связывает все три сигнала: метрики по времени → лог-строки → полный путь запроса.
 
 ---
 
@@ -423,6 +408,60 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 
 ---
 
+### 🗄️ Шаг 8 — pgx Tracing (автоматическая инструментация БД)
+
+**Активировать:** найти `// step8 ` → заменить на ``, затем `go mod tidy && docker compose up --build -d`.
+
+**Что добавляется:**
+
+1. PostgreSQL-хранилище (`pgx/v5`) вместо in-memory map
+2. `otelpgx.NewTracer()` — автоматически создаёт span для каждого SQL-запроса
+
+`internal/storage/postgres.go` — ключевые строки:
+```go
+config.ConnConfig.Tracer = otelpgx.NewTracer()  // ← вся "магия" в одной строке
+pool, err := pgxpool.NewWithConfig(ctx, config)
+```
+
+`main.go`:
+```go
+pgStore, err := storage.NewPGX(ctx, dbDSN)
+if err != nil { log.Fatalf("db: %v", err) }
+store = pgStore
+```
+
+**Запускаем:**
+```bash
+docker compose up --build -d
+curl -X POST http://localhost:8080/shorten -d '{"url":"https://go.dev"}' -H 'Content-Type: application/json'
+curl http://localhost:8080/<code>
+```
+
+**На что смотреть в Tempo / Jaeger:**
+
+```
+url-shortener-http              [12ms]
+  └── handler.Shorten           [ 8ms]
+        └── db.Exec             [ 5ms]  ← автоматический span от otelpgx
+              attrs: db.system=postgresql
+                     db.statement="INSERT INTO urls..."
+                     net.peer.name=postgres
+
+url-shortener-http              [10ms]
+  └── handler.Redirect          [ 7ms]
+        ├── db.QueryRow         [ 3ms]  ← SELECT
+        └── db.Exec             [ 1ms]  ← UPDATE clicks
+```
+
+**Ключевой момент:**
+Нулевые изменения в бизнес-коде — `Save`, `Get`, `IncrementClicks` не тронуты.
+Вся инструментация через единственный вызов `otelpgx.NewTracer()` в конфиге пула.
+
+Это и есть **автоматическая инструментация** — библиотека знает о pgx internals
+и внедряет spans через официальный hook-интерфейс pgx трассировщика.
+
+---
+
 ## Итоговая архитектура observability
 
 ```
@@ -430,33 +469,30 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 │                    Go Services                          │
 │                                                         │
 │  url-shortener ──HTTP──► stats-service                  │
-│       │                       │                         │
-│   Prometheus              Prometheus                    │
-│   client_golang           client_golang                 │
-│       │                       │                         │
-│  OTel SDK (traces+logs)   OTel SDK (traces+logs)        │
-└─────────┬─────────────────────┬───────────────────────--┘
-          │ OTLP/gRPC           │ OTLP/gRPC
-          ▼                     ▼
+│                                                         │
+│  OTel SDK: traces + logs + metrics (OTLP/gRPC push)     │
+│  Prometheus client_golang: /metrics endpoint (pull)     │
+└─────────────────────┬───────────────────────────────────┘
+                      │ OTLP/gRPC
+                      ▼
    ┌──────────────────────────────┐
    │      OTel Collector          │
    │  receiver: otlp              │
    │  processors: batch, memlimit │
    │  exporters:                  │
-   │    → Tempo  (traces)         │
-   │    → Loki   (logs)           │
-   │    → Prometheus (metrics)    │
+   │    → Tempo   (traces)        │
+   │    → Jaeger  (traces)        │
+   │    → Loki    (logs)          │
+   │    → :8889   (metrics)       │
    └──────────────────────────────┘
-          │
-          ▼
+          │                   ▲
+          ▼                   │ scrape /metrics
    ┌──────────────────────────────┐
-   │         Grafana              │
-   │  ← Prometheus datasource     │
+   │  Prometheus + Grafana        │
+   │  ← OTel metrics (:8889)      │
    │  ← Loki datasource           │
    │  ← Tempo datasource          │
-   │                              │
-   │  Dashboards + Explore +      │
-   │  Cross-datasource linking    │
+   │  ← Jaeger (standalone UI)    │
    └──────────────────────────────┘
 ```
 

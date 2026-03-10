@@ -9,9 +9,10 @@ version: "3.9"
 #   prometheus     — metrics storage & scraper
 #   grafana        — dashboards for metrics, logs, traces
 #   loki           — log aggregation backend
-#   promtail       — log shipper (reads Docker container logs → Loki)
 #   tempo          — distributed tracing backend (OTLP receiver)
+#   jaeger         — distributed tracing backend (OTLP receiver, UI)
 #   otel-collector — OpenTelemetry Collector (receives OTLP, fans out)
+#   postgres       — relational DB (step8: pgx tracing)
 # ─────────────────────────────────────────────────────────────────────────────
 
 networks:
@@ -23,6 +24,7 @@ volumes:
   grafana_data: {}
   loki_data: {}
   tempo_data: {}
+  postgres_data: {}
 
 services:
 
@@ -37,13 +39,16 @@ services:
     environment:
       PORT: "8080"
       BASE_URL: "http://localhost:8080"
-      # step5 OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector:4317"
+      # step2 OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector:4317"
       # step7 STATS_SERVICE_URL: "http://stats-service:8081"
+      # step8 DATABASE_URL: "postgres://postgres:postgres@postgres:5432/shortener?sslmode=disable"
     networks:
       - observability
     restart: unless-stopped
     depends_on:
-      - otel-collector  # step5: uncomment when adding tracing
+      - otel-collector  # step2: uncomment when adding OTel SDK
+      # step8 postgres:
+      # step8   condition: service_healthy
 
   # step7 stats-service:
   # step7   build:
@@ -53,7 +58,7 @@ services:
   # step7     - "8081:8081"
   # step7   environment:
   # step7     PORT: "8081"
-  # step7     OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector:4317"
+  # step7     OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector:4317"  # sends traces+metrics+logs
   # step7   networks:
   # step7     - observability
   # step7   restart: unless-stopped
@@ -108,18 +113,6 @@ services:
       - observability
     restart: unless-stopped
 
-  promtail:
-    image: grafana/promtail:3.3.2
-    volumes:
-      - ./promtail/promtail-config.yaml:/etc/promtail/config.yaml:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    command: -config.file=/etc/promtail/config.yaml
-    networks:
-      - observability
-    depends_on:
-      - loki
-    restart: unless-stopped
-
   tempo:
     image: grafana/tempo:2.6.1
     ports:
@@ -129,6 +122,16 @@ services:
       - ./tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
       - tempo_data:/var/tempo
     command: -config.file=/etc/tempo/tempo.yaml
+    networks:
+      - observability
+    restart: unless-stopped
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.68.0
+    ports:
+      - "16686:16686"   # Jaeger UI
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
     networks:
       - observability
     restart: unless-stopped
@@ -145,4 +148,24 @@ services:
     depends_on:
       - tempo
       - loki
+      - jaeger
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: shortener
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - observability
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped

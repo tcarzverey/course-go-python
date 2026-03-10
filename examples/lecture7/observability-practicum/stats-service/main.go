@@ -9,6 +9,7 @@ import (
 	"os"
 
 	// step7 "github.com/observability-practicum/stats-service/internal/telemetry"
+	// step7 "go.opentelemetry.io/contrib/bridges/otelslog"
 	// step7 "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	"github.com/observability-practicum/stats-service/internal/handler"
@@ -19,16 +20,17 @@ func main() {
 	// step7 otlpEndpoint := envOr("OTEL_EXPORTER_OTLP_ENDPOINT", "otel-collector:4317")
 
 	// ── Logger ───────────────────────────────────────────────────────────────
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	slog.SetDefault(logger)
+	logger := slog.Default()
 
-	// ── OpenTelemetry tracer ─────────────────────────────────────────────────
 	// step7 ctx := context.Background()
-	// step7 shutdown, err := telemetry.InitTracer(ctx, "stats-service", otlpEndpoint)
+	// step7 shutdown, err := telemetry.Init(ctx, "stats-service", otlpEndpoint)
 	// step7 if err != nil {
-	// step7 	log.Fatalf("failed to initialise tracer: %v", err)
+	// step7 	log.Fatalf("failed to initialise OTel SDK: %v", err)
 	// step7 }
 	// step7 defer func() { _ = shutdown(context.Background()) }()
+
+	// step7 logger = slog.New(otelslog.NewHandler("stats-service"))
+	// step7 slog.SetDefault(logger)
 
 	// ── Handler & Router ──────────────────────────────────────────────────────
 	h := handler.New(logger)

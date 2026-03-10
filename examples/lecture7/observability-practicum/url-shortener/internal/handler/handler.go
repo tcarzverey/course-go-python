@@ -19,7 +19,7 @@ import (
 
 // Handler holds all dependencies for HTTP handlers.
 type Handler struct {
-	storage         *storage.Storage
+	storage         storage.Store
 	baseURL         string
 	logger          *slog.Logger
 	statsServiceURL string // step7: URL of the stats-service (empty = disabled)
@@ -27,7 +27,7 @@ type Handler struct {
 
 // New creates a new Handler.
 // Pass slog.Default() for logger and "" for statsServiceURL until later steps.
-func New(s *storage.Storage, baseURL string, logger *slog.Logger, statsServiceURL string) *Handler {
+func New(s storage.Store, baseURL string, logger *slog.Logger, statsServiceURL string) *Handler {
 	return &Handler{
 		storage:         s,
 		baseURL:         baseURL,
@@ -106,7 +106,7 @@ func (h *Handler) Redirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.storage.IncrementClicks(code)
+	_ = h.storage.IncrementClicks(code)
 
 	// step7 // Synchronous call to stats-service so the distributed trace is visible end-to-end.
 	// step7 if h.statsServiceURL != "" {
