@@ -66,7 +66,7 @@ func (h *Handler) Shorten(w http.ResponseWriter, r *http.Request) {
 
 	code, err := h.storage.Save(req.URL)
 	if err != nil {
-		// step5 h.logger.ErrorContext(r.Context(), "failed to save URL", "error", err)
+		h.logger.ErrorContext(r.Context(), "failed to save URL", "error", err)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "storage error")
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -77,7 +77,7 @@ func (h *Handler) Shorten(w http.ResponseWriter, r *http.Request) {
 		attribute.String("url.code", code),
 		attribute.String("url.original", req.URL),
 	)
-	// step5 h.logger.InfoContext(r.Context(), "URL shortened", "code", code, "original_url", req.URL)
+	h.logger.InfoContext(r.Context(), "URL shortened", "code", code, "original_url", req.URL)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(ShortenResponse{
@@ -99,7 +99,7 @@ func (h *Handler) Redirect(w http.ResponseWriter, r *http.Request) {
 	record, err := h.storage.Get(code)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
-			// step5 h.logger.WarnContext(ctx, "code not found", "code", code)
+			h.logger.WarnContext(ctx, "code not found", "code", code)
 			http.NotFound(w, r)
 			return
 		}
@@ -116,7 +116,7 @@ func (h *Handler) Redirect(w http.ResponseWriter, r *http.Request) {
 	// step7 	}
 	// step7 }
 
-	// step5 h.logger.InfoContext(ctx, "redirect", "code", code, "url", record.OriginalURL)
+	h.logger.InfoContext(ctx, "redirect", "code", code, "url", record.OriginalURL)
 
 	http.Redirect(w, r, record.OriginalURL, http.StatusFound)
 }

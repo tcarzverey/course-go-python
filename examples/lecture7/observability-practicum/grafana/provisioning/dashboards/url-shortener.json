@@ -13,7 +13,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
       "targets": [
         {
-          "datasource": { "type": "prometheus" },
+          "datasource": { "type": "prometheus", "uid": "prometheus_uid" },
           "expr": "rate(otelcol_http_server_request_duration_seconds_count{service_name=\"url-shortener\"}[1m])",
           "legendFormat": "{{http_request_method}} {{http_route}} {{http_response_status_code}}"
         }
@@ -26,7 +26,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
       "targets": [
         {
-          "datasource": { "type": "prometheus" },
+          "datasource": { "type": "prometheus", "uid": "prometheus_uid" },
           "expr": "histogram_quantile(0.99, rate(otelcol_http_server_request_duration_seconds_bucket{service_name=\"url-shortener\"}[1m]))",
           "legendFormat": "p99 {{http_route}}"
         }
@@ -39,7 +39,7 @@
       "gridPos": { "h": 4, "w": 6, "x": 0, "y": 8 },
       "targets": [
         {
-          "datasource": { "type": "prometheus" },
+          "datasource": { "type": "prometheus", "uid": "prometheus_uid" },
           "expr": "100 * rate(otelcol_http_server_request_duration_seconds_count{service_name=\"url-shortener\", http_response_status_code=~\"5..\"}[5m]) / rate(otelcol_http_server_request_duration_seconds_count{service_name=\"url-shortener\"}[5m])"
         }
       ],
@@ -52,7 +52,7 @@
       "gridPos": { "h": 10, "w": 24, "x": 0, "y": 12 },
       "targets": [
         {
-          "datasource": { "type": "loki" },
+          "datasource": { "type": "loki", "uid": "loki_uid" },
           "expr": "{service_name=\"url-shortener\"}"
         }
       ]

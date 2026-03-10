@@ -3,7 +3,8 @@ package middleware
 import (
 	"log/slog"
 	"net/http"
-	// step6 "go.opentelemetry.io/otel/trace"
+	
+	"go.opentelemetry.io/otel/trace"
 )
 
 // responseWriter wraps http.ResponseWriter to capture the status code.
@@ -29,16 +30,16 @@ func Logging(logger *slog.Logger) func(http.Handler) http.Handler {
 			rw := newResponseWriter(w)
 			next.ServeHTTP(rw, r)
 
-			// step5 traceID := ""
-			// step6 if span := trace.SpanFromContext(r.Context()); span.SpanContext().IsValid() {
-			// step6 	traceID = span.SpanContext().TraceID().String()
-			// step6 }
-			// step5 logger.InfoContext(r.Context(), "http request",
-			// step5 	"method", r.Method,
-			// step5 	"path", r.URL.Path,
-			// step5 	"status", rw.status,
-			// step5 	"trace_id", traceID,
-			// step5 )
+			traceID := ""
+			if span := trace.SpanFromContext(r.Context()); span.SpanContext().IsValid() {
+				traceID = span.SpanContext().TraceID().String()
+			}
+			logger.InfoContext(r.Context(), "http request",
+				"method", r.Method,
+				"path", r.URL.Path,
+				"status", rw.status,
+				"trace_id", traceID,
+			)
 		})
 	}
 }

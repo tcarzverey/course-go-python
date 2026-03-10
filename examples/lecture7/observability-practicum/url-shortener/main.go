@@ -9,8 +9,8 @@ import (
 	"os"
 
 	"github.com/observability-practicum/url-shortener/internal/telemetry"
+	"go.opentelemetry.io/contrib/bridges/otelslog"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	// step5 "go.opentelemetry.io/contrib/bridges/otelslog"
 
 	"github.com/observability-practicum/url-shortener/internal/handler"
 	"github.com/observability-practicum/url-shortener/internal/middleware"
@@ -28,9 +28,9 @@ func main() {
 	// Base (step0-1): plain default logger, no structured output.
 	logger := slog.Default()
 
-	// step5 // Switch to OTel-backed slog — logs are sent via OTLP once step2 is active.
-	// step5 logger = slog.New(otelslog.NewHandler("url-shortener"))
-	// step5 slog.SetDefault(logger)
+	// Switch to OTel-backed slog — logs are sent via OTLP once step2 is active.
+	logger = slog.New(otelslog.NewHandler("url-shortener"))
+	slog.SetDefault(logger)
 
 	// ── OpenTelemetry SDK ────────────────────────────────────────────────────
 	ctx := context.Background()
@@ -74,7 +74,7 @@ func main() {
 
 	// ── Start server ──────────────────────────────────────────────────────────
 	addr := fmt.Sprintf(":%s", port)
-	log.Printf("starting url-shortener on %s (base_url=%s)", addr, baseURL)
+	slog.Info("starting url-shortener", "addr", addr, "baseURL", baseURL)
 	if err := http.ListenAndServe(addr, root); err != nil {
 		log.Fatalf("server error: %v", err)
 	}
