@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"os"
 
-	// step2 "github.com/observability-practicum/url-shortener/internal/telemetry"
-	// step3 "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	// step4 "go.opentelemetry.io/contrib/bridges/otelslog"
+	"github.com/observability-practicum/url-shortener/internal/telemetry"
+	// step4 "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	// step5 "go.opentelemetry.io/contrib/bridges/otelslog"
 
 	"github.com/observability-practicum/url-shortener/internal/handler"
 	"github.com/observability-practicum/url-shortener/internal/middleware"
@@ -21,24 +21,24 @@ func main() {
 	// ── Configuration ────────────────────────────────────────────────────────
 	port := envOr("PORT", "8080")
 	baseURL := envOr("BASE_URL", "http://localhost:"+port)
-	// step2 otlpEndpoint := envOr("OTEL_EXPORTER_OTLP_ENDPOINT", "otel-collector:4317")
+	otlpEndpoint := envOr("OTEL_EXPORTER_OTLP_ENDPOINT", "otel-collector:4317")
 	// step7 statsServiceURL := envOr("STATS_SERVICE_URL", "http://stats-service:8081")
 
 	// ── Logger ───────────────────────────────────────────────────────────────
 	// Base (step0-1): plain default logger, no structured output.
 	logger := slog.Default()
 
-	// step4 // Switch to OTel-backed slog — logs are sent via OTLP once step2 is active.
-	// step4 logger = slog.New(otelslog.NewHandler("url-shortener"))
-	// step4 slog.SetDefault(logger)
+	// step5 // Switch to OTel-backed slog — logs are sent via OTLP once step2 is active.
+	// step5 logger = slog.New(otelslog.NewHandler("url-shortener"))
+	// step5 slog.SetDefault(logger)
 
 	// ── OpenTelemetry SDK ────────────────────────────────────────────────────
-	// step2 ctx := context.Background()
-	// step2 shutdown, err := telemetry.Init(ctx, "url-shortener", otlpEndpoint)
-	// step2 if err != nil {
-	// step2 	log.Fatalf("failed to initialise OTel SDK: %v", err)
-	// step2 }
-	// step2 defer func() { _ = shutdown(context.Background()) }()
+	ctx := context.Background()
+	shutdown, err := telemetry.Init(ctx, "url-shortener", otlpEndpoint)
+	if err != nil {
+		log.Fatalf("failed to initialise OTel SDK: %v", err)
+	}
+	defer func() { _ = shutdown(context.Background()) }()
 
 	// ── Storage & Handler ─────────────────────────────────────────────────────
 	// step8 dbDSN := envOr("DATABASE_URL", "postgres://postgres:postgres@postgres:5432/shortener?sslmode=disable")
@@ -65,12 +65,12 @@ func main() {
 	// ── Middleware chain (outermost runs first) ───────────────────────────────
 	var root http.Handler = mux
 
-	// step3 // OTel HTTP middleware: automatic span per request + HTTP metrics via MeterProvider.
-	// step3 root = otelhttp.NewHandler(root, "url-shortener-http",
-	// step3 	otelhttp.WithMessageEvents(otelhttp.ReadEvents, otelhttp.WriteEvents),
-	// step3 )
+	// step4 // OTel HTTP middleware: automatic span + HTTP metrics for the whole HTTP layer.
+	// step4 root = otelhttp.NewHandler(root, "url-shortener-http",
+	// step4 	otelhttp.WithMessageEvents(otelhttp.ReadEvents, otelhttp.WriteEvents),
+	// step4 )
 
-	root = middleware.Logging(logger)(root) // step4 activates log output
+	root = middleware.Logging(logger)(root) // step5 activates log output
 
 	// ── Start server ──────────────────────────────────────────────────────────
 	addr := fmt.Sprintf(":%s", port)

@@ -175,9 +175,41 @@ gRPC conn → OTel Collector :4317
 
 ---
 
-### 🔧 Шаг 3 — OTel HTTP middleware (автоматические спаны и метрики)
+### ✏️ Шаг 3 — Ручные спаны (OTel Tracing API)
 
 **Активировать:** найти `// step3 ` → заменить на ``, перебилдить.
+
+**Что добавляется в `handler.go`:**
+```go
+func (h *Handler) Shorten(w http.ResponseWriter, r *http.Request) {
+    ctx, span := otel.Tracer("url-shortener").Start(r.Context(), "handler.Shorten")
+    defer span.End()
+
+    // ... бизнес-логика ...
+
+    span.SetAttributes(
+        attribute.String("url.code", code),
+        attribute.String("url.original", req.URL),
+    )
+}
+```
+
+Аналогично для `Redirect` — `handler.Redirect` со своими атрибутами.
+
+**На что смотреть в Tempo / Jaeger:**
+- Появились спаны: `handler.Shorten`, `handler.Redirect`
+- Каждый span содержит атрибуты: `url.code`, `url.original`
+- Ошибки: `span.RecordError(err)` + `span.SetStatus(codes.Error, "...")` → красный span
+
+**Чего не хватает:**
+Каждый span — изолированный. Нет HTTP-контекста (`http.method`, `status_code`).
+Каждый хэндлер нужно инструментировать вручную.
+
+---
+
+### 🔧 Шаг 4 — OTel HTTP middleware (автоматические спаны и метрики)
+
+**Активировать:** найти `// step4 ` → заменить на ``, перебилдить.
 
 **Что добавляется в `main.go`:**
 ```go
@@ -186,25 +218,30 @@ root = otelhttp.NewHandler(root, "url-shortener-http",
 )
 ```
 
-`otelhttp` использует уже инициализированные глобальные провайдеры (step2) и автоматически:
-- Создаёт **span** для каждого HTTP-запроса (`url-shortener-http`)
-- Записывает **метрики**: `http.server.request.duration` (гистограмма latency), `http.server.active_requests`
+`otelhttp` использует глобальные провайдеры (step2) и автоматически:
+- Создаёт корневой **span** `url-shortener-http` для каждого запроса
+- Записывает **метрики**: `http.server.request.duration`, `http.server.active_requests`
 
-**На что смотреть:**
-- Tempo / Jaeger: появились трейсы, каждый запрос — отдельный span
-- Prometheus → метрика `http_server_request_duration_seconds` (из коллектора :8889)
-- Попробуйте добавить новый хэндлер — он автоматически получит трейс и метрики
+**На что смотреть в Tempo / Jaeger:**
+```
+url-shortener-http          [5ms]   ← добавил otelhttp (step4)
+  └── handler.Shorten       [3ms]   ← наш ручной span (step3)
+        attrs: url.code, url.original
+```
 
-**Паттерн:**
-Одна строка кода → полная observability для всего HTTP-слоя.
+Спаны теперь вложены — `otelhttp` создаёт родительский span, наши ручные становятся дочерними автоматически через context propagation.
+
+**Prometheus:** метрика `http_server_request_duration_seconds` из коллектора `:8889`.
+
+**Ключевое отличие от step3:**
+На step3 мы писали инструментацию руками и видели только бизнес-логику.
+На step4 весь HTTP-слой закрыт одной строкой, а ручные спаны дополняют картину.
 
 ---
 
-### 📝 Шаг 4 — Структурированные логи (slog + OTel bridge)
+### 📝 Шаг 5 — Структурированные логи (slog + OTel bridge)
 
-**Активировать:** найти `// step4 ` → заменить на ``, перебилдить.
-> ⚠️ Требует step5: логи идут через OTel LoggerProvider, который инициализируется на step5.
-> Активируй оба шага вместе: `// step4 ` и `// step5 ` → ``.
+**Активировать:** найти `// step5 ` → заменить на ``, перебилдить.
 
 **Что добавляется:**
 1. В `main.go` — OTel-backed slog через bridge:
@@ -248,64 +285,6 @@ slog.Logger (otelslog.NewHandler)
 - Логи приходят в Loki через OTel Collector, а не через Promtail
 - Каждая запись содержит structured attributes: `method`, `path`, `status`
 - `service_name` проставляется автоматически из OTel Resource
-
----
-
-### 🔍 Шаг 5 — OpenTelemetry Tracing (ручные спаны)
-
-**Активировать:** найти `// step5 ` → заменить на ``, перебилдить.
-
-**Что добавляется:**
-
-`internal/telemetry/telemetry.go` — инициализация TracerProvider:
-```go
-func InitTracer(ctx context.Context, serviceName, otlpEndpoint string) (func(context.Context) error, error) {
-    // gRPC соединение к OTel Collector
-    // OTLP exporter
-    // Resource с именем сервиса
-    // TracerProvider с BatchSpanProcessor
-    // Регистрация глобального propagator (W3C TraceContext)
-}
-```
-
-`main.go`:
-```go
-shutdown, err := telemetry.InitTracer(ctx, "url-shortener", otlpEndpoint)
-defer func() { _ = shutdown(context.Background()) }()
-```
-
-`handler.go` — ручные спаны:
-```go
-func (h *Handler) Shorten(w http.ResponseWriter, r *http.Request) {
-    ctx, span := otel.Tracer("url-shortener").Start(r.Context(), "handler.Shorten")
-    defer span.End()
-
-    // ... бизнес-логика ...
-
-    span.SetAttributes(
-        attribute.String("url.code", code),
-        attribute.String("url.original", req.URL),
-    )
-}
-```
-
-**Проверяем:**
-```bash
-# Создаём ссылку и делаем редирект
-curl -X POST http://localhost:8080/shorten -d '{"url":"https://go.dev"}' -H 'Content-Type: application/json'
-curl http://localhost:8080/<code>
-```
-
-В Grafana → Explore → Tempo:
-- Выбрать `Search` → Service Name = `url-shortener`
-- Видим трейс: один спан `handler.Redirect` с атрибутами
-
-**На что смотреть:**
-- Каждый span имеет `trace_id`, `span_id`, `parent_span_id`
-- Атрибуты `url.code`, `url.original` видны в Tempo
-- Ошибки в хэндлере → `span.RecordError(err)` → красный span в Tempo
-
-**Вопрос студентам:** Что сейчас не хватает в трейсе? (Нет HTTP-уровня: method, url, status)
 
 ---
 

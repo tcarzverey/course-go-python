@@ -9,9 +9,10 @@ import (
 	"log/slog"
 	"net/http"
 
-	// step5 "go.opentelemetry.io/otel"
-	// step5 "go.opentelemetry.io/otel/attribute"
-	// step5 "go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+
 	// step7 "go.opentelemetry.io/otel/propagation"
 
 	"github.com/observability-practicum/url-shortener/internal/storage"
@@ -47,14 +48,14 @@ type ShortenResponse struct {
 
 // Shorten handles POST /shorten
 func (h *Handler) Shorten(w http.ResponseWriter, r *http.Request) {
-	// step5 ctx := r.Context()
-	// step5 ctx, span := otel.Tracer("url-shortener").Start(ctx, "handler.Shorten")
-	// step5 defer span.End()
+	ctx := r.Context()
+	ctx, span := otel.Tracer("url-shortener").Start(ctx, "handler.Shorten")
+	defer span.End()
 
 	var req ShortenRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		// step5 span.RecordError(err)
-		// step5 span.SetStatus(codes.Error, "invalid request body")
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "invalid request body")
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -65,18 +66,18 @@ func (h *Handler) Shorten(w http.ResponseWriter, r *http.Request) {
 
 	code, err := h.storage.Save(req.URL)
 	if err != nil {
-		// step4 h.logger.ErrorContext(r.Context(), "failed to save URL", "error", err)
-		// step5 span.RecordError(err)
-		// step5 span.SetStatus(codes.Error, "storage error")
+		// step5 h.logger.ErrorContext(r.Context(), "failed to save URL", "error", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "storage error")
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
-	// step5 span.SetAttributes(
-	// step5 	attribute.String("url.code", code),
-	// step5 	attribute.String("url.original", req.URL),
-	// step5 )
-	// step4 h.logger.InfoContext(r.Context(), "URL shortened", "code", code, "original_url", req.URL)
+	span.SetAttributes(
+		attribute.String("url.code", code),
+		attribute.String("url.original", req.URL),
+	)
+	// step5 h.logger.InfoContext(r.Context(), "URL shortened", "code", code, "original_url", req.URL)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(ShortenResponse{
@@ -89,16 +90,16 @@ func (h *Handler) Shorten(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Redirect(w http.ResponseWriter, r *http.Request) {
 	code := r.PathValue("code")
 	ctx := r.Context()
-	_ = ctx // used by step4 logger calls and step5/step7; suppresses "declared and not used" before those steps
+	_ = ctx // used by step5 logger calls and step3/step7; suppresses "declared and not used" before those steps
 
-	// step5 ctx, span := otel.Tracer("url-shortener").Start(ctx, "handler.Redirect")
-	// step5 defer span.End()
-	// step5 span.SetAttributes(attribute.String("url.code", code))
+	ctx, span := otel.Tracer("url-shortener").Start(ctx, "handler.Redirect")
+	defer span.End()
+	span.SetAttributes(attribute.String("url.code", code))
 
 	record, err := h.storage.Get(code)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
-			// step4 h.logger.WarnContext(ctx, "code not found", "code", code)
+			// step5 h.logger.WarnContext(ctx, "code not found", "code", code)
 			http.NotFound(w, r)
 			return
 		}
@@ -115,7 +116,7 @@ func (h *Handler) Redirect(w http.ResponseWriter, r *http.Request) {
 	// step7 	}
 	// step7 }
 
-	// step4 h.logger.InfoContext(ctx, "redirect", "code", code, "url", record.OriginalURL)
+	// step5 h.logger.InfoContext(ctx, "redirect", "code", code, "url", record.OriginalURL)
 
 	http.Redirect(w, r, record.OriginalURL, http.StatusFound)
 }
