@@ -39,31 +39,30 @@ services:
     environment:
       PORT: "8080"
       BASE_URL: "http://localhost:8080"
-      # step2 OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector:4317"
-      # step7 STATS_SERVICE_URL: "http://stats-service:8081"
-      # step8 DATABASE_URL: "postgres://postgres:postgres@postgres:5432/shortener?sslmode=disable"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector:4317"
+      STATS_SERVICE_URL: "http://stats-service:8081"
+      DATABASE_URL: "postgres://postgres:postgres@postgres:5432/shortener?sslmode=disable"
     networks:
       - observability
     restart: unless-stopped
     depends_on:
-      - otel-collector  # step2: uncomment when adding OTel SDK
-      # step8 postgres:
-      # step8   condition: service_healthy
+      - otel-collector
+      - postgres
 
-  # step7 stats-service:
-  # step7   build:
-  # step7     context: ./stats-service
-  # step7     dockerfile: Dockerfile
-  # step7   ports:
-  # step7     - "8081:8081"
-  # step7   environment:
-  # step7     PORT: "8081"
-  # step7     OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector:4317"  # sends traces+metrics+logs
-  # step7   networks:
-  # step7     - observability
-  # step7   restart: unless-stopped
-  # step7   depends_on:
-  # step7     - otel-collector
+  stats-service:
+    build:
+      context: ./stats-service
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      PORT: "8081"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector:4317"  # sends traces+metrics+logs
+    networks:
+      - observability
+    restart: unless-stopped
+    depends_on:
+      - otel-collector
 
   # ── Observability Stack ────────────────────────────────────────────────────
 

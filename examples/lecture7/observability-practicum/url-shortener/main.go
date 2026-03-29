@@ -22,7 +22,7 @@ func main() {
 	port := envOr("PORT", "8080")
 	baseURL := envOr("BASE_URL", "http://localhost:"+port)
 	otlpEndpoint := envOr("OTEL_EXPORTER_OTLP_ENDPOINT", "otel-collector:4317")
-	// step7 statsServiceURL := envOr("STATS_SERVICE_URL", "http://stats-service:8081")
+	statsServiceURL := envOr("STATS_SERVICE_URL", "http://stats-service:8081")
 
 	// ── Logger ───────────────────────────────────────────────────────────────
 	// Base (step0-1): plain default logger, no structured output.
@@ -41,17 +41,18 @@ func main() {
 	defer func() { _ = shutdown(context.Background()) }()
 
 	// ── Storage & Handler ─────────────────────────────────────────────────────
-	// step8 dbDSN := envOr("DATABASE_URL", "postgres://postgres:postgres@postgres:5432/shortener?sslmode=disable")
+	dbDSN := envOr("DATABASE_URL", "postgres://postgres:postgres@postgres:5432/shortener?sslmode=disable")
 
 	var store storage.Store = storage.New() // in-memory, steps 0–7
 
-	// step8 pgStore, err := storage.NewPGX(ctx, dbDSN)
-	// step8 if err != nil { log.Fatalf("db: %v", err) }
-	// step8 store = pgStore
+	pgStore, err := storage.NewPGX(ctx, dbDSN)
+	if err != nil {
+		log.Fatalf("db: %v", err)
+	}
+	store = pgStore
 
-	// step7 // Pass the stats-service URL so the handler can track clicks there.
-	// step7 statsURL := statsServiceURL
-	statsURL := "" // step7: replace this line with the two lines above
+	// Pass the stats-service URL so the handler can track clicks there.
+	statsURL := statsServiceURL
 
 	h := handler.New(store, baseURL, logger, statsURL)
 

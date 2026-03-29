@@ -8,29 +8,29 @@ import (
 	"net/http"
 	"os"
 
-	// step7 "github.com/observability-practicum/stats-service/internal/telemetry"
-	// step7 "go.opentelemetry.io/contrib/bridges/otelslog"
-	// step7 "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"github.com/observability-practicum/stats-service/internal/telemetry"
+	"go.opentelemetry.io/contrib/bridges/otelslog"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	"github.com/observability-practicum/stats-service/internal/handler"
 )
 
 func main() {
 	port := envOr("PORT", "8081")
-	// step7 otlpEndpoint := envOr("OTEL_EXPORTER_OTLP_ENDPOINT", "otel-collector:4317")
+	otlpEndpoint := envOr("OTEL_EXPORTER_OTLP_ENDPOINT", "otel-collector:4317")
 
 	// ── Logger ───────────────────────────────────────────────────────────────
 	logger := slog.Default()
 
-	// step7 ctx := context.Background()
-	// step7 shutdown, err := telemetry.Init(ctx, "stats-service", otlpEndpoint)
-	// step7 if err != nil {
-	// step7 	log.Fatalf("failed to initialise OTel SDK: %v", err)
-	// step7 }
-	// step7 defer func() { _ = shutdown(context.Background()) }()
+	ctx := context.Background()
+	shutdown, err := telemetry.Init(ctx, "stats-service", otlpEndpoint)
+	if err != nil {
+		log.Fatalf("failed to initialise OTel SDK: %v", err)
+	}
+	defer func() { _ = shutdown(context.Background()) }()
 
-	// step7 logger = slog.New(otelslog.NewHandler("stats-service"))
-	// step7 slog.SetDefault(logger)
+	logger = slog.New(otelslog.NewHandler("stats-service"))
+	slog.SetDefault(logger)
 
 	// ── Handler & Router ──────────────────────────────────────────────────────
 	h := handler.New(logger)
@@ -41,7 +41,7 @@ func main() {
 	mux.HandleFunc("GET /health", h.Health)
 
 	var root http.Handler = mux
-	// step7 root = otelhttp.NewHandler(root, "stats-service-http")
+	root = otelhttp.NewHandler(root, "stats-service-http")
 
 	// ── Start server ──────────────────────────────────────────────────────────
 	addr := fmt.Sprintf(":%s", port)

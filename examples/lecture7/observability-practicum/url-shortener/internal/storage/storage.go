@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"errors"
 	"math/rand"
 	"sync"
@@ -19,9 +20,9 @@ type URLRecord struct {
 // Store is the storage interface used by all handler code.
 // Implementations: MemoryStorage (steps 0–7), PGXStorage (step8).
 type Store interface {
-	Save(originalURL string) (string, error)
-	Get(code string) (*URLRecord, error)
-	IncrementClicks(code string) error
+	Save(ctx context.Context, originalURL string) (string, error)
+	Get(ctx context.Context, code string) (*URLRecord, error)
+	IncrementClicks(ctx context.Context, code string) error
 }
 
 type MemoryStorage struct {
@@ -35,7 +36,7 @@ func New() Store {
 	}
 }
 
-func (s *MemoryStorage) Save(originalURL string) (string, error) {
+func (s *MemoryStorage) Save(_ context.Context, originalURL string) (string, error) {
 	code := generateCode()
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -47,7 +48,7 @@ func (s *MemoryStorage) Save(originalURL string) (string, error) {
 	return code, nil
 }
 
-func (s *MemoryStorage) Get(code string) (*URLRecord, error) {
+func (s *MemoryStorage) Get(_ context.Context, code string) (*URLRecord, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	r, ok := s.urls[code]
@@ -57,7 +58,7 @@ func (s *MemoryStorage) Get(code string) (*URLRecord, error) {
 	return r, nil
 }
 
-func (s *MemoryStorage) IncrementClicks(code string) error {
+func (s *MemoryStorage) IncrementClicks(_ context.Context, code string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if r, ok := s.urls[code]; ok {

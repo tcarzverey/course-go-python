@@ -7,9 +7,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	// step7 "go.opentelemetry.io/otel"
-	// step7 "go.opentelemetry.io/otel/attribute"
-	// step7 "go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 // clickStore holds per-code click counters, thread-safe via atomic.
@@ -59,9 +59,9 @@ func (h *Handler) Track(w http.ResponseWriter, r *http.Request) {
 	// ctx is declared here (always). At step7 we *reassign* it (= not :=) with the
 	// extracted trace context so this span joins the trace started in url-shortener.
 	ctx := r.Context()
-	// step7 ctx = otel.GetTextMapPropagator().Extract(ctx, propagation.HeaderCarrier(r.Header))
-	// step7 ctx, span := otel.Tracer("stats-service").Start(ctx, "handler.Track")
-	// step7 defer span.End()
+	ctx = otel.GetTextMapPropagator().Extract(ctx, propagation.HeaderCarrier(r.Header))
+	ctx, span := otel.Tracer("stats-service").Start(ctx, "handler.Track")
+	defer span.End()
 
 	var body struct {
 		Code string `json:"code"`
@@ -73,10 +73,10 @@ func (h *Handler) Track(w http.ResponseWriter, r *http.Request) {
 
 	total := h.store.inc(body.Code)
 
-	// step7 span.SetAttributes(
-	// step7 	attribute.String("url.code", body.Code),
-	// step7 	attribute.Int64("clicks.total", total),
-	// step7 )
+	span.SetAttributes(
+		attribute.String("url.code", body.Code),
+		attribute.Int64("clicks.total", total),
+	)
 
 	h.logger.InfoContext(ctx, "click tracked", "code", body.Code, "total", total)
 

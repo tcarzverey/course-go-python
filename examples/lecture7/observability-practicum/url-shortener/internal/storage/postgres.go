@@ -4,13 +4,15 @@ import (
 	"context"
 	"errors"
 
+	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	// step8 "github.com/exaring/otelpgx"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 )
 
 // PGXStorage is a PostgreSQL-backed Store using pgx/v5.
-// Activate with: find "// step8 " → replace with "" (see PLAN.md, Step 8).
 type PGXStorage struct {
 	pool *pgxpool.Pool
 }
@@ -22,8 +24,8 @@ func NewPGX(ctx context.Context, dsn string) (Store, error) {
 		return nil, err
 	}
 
-	// step8 // otelpgx instruments every SQL query as a child span automatically.
-	// step8 config.ConnConfig.Tracer = otelpgx.NewTracer()
+	// otelpgx instruments every SQL query as a child span automatically.
+	config.ConnConfig.Tracer = otelpgx.NewTracer()
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
@@ -40,6 +42,18 @@ func NewPGX(ctx context.Context, dsn string) (Store, error) {
 		return nil, err
 	}
 
+	meter := otel.GetMeterProvider().Meter("url-shortener")
+	_, _ = meter.Int64ObservableGauge("db.pool.connections",
+		metric.WithDescription("Number of connections in the pgx connection pool"),
+		metric.WithInt64Callback(func(_ context.Context, o metric.Int64Observer) error {
+			stat := pool.Stat()
+			o.Observe(int64(stat.AcquiredConns()), metric.WithAttributes(attribute.String("state", "acquired")))
+			o.Observe(int64(stat.IdleConns()), metric.WithAttributes(attribute.String("state", "idle")))
+			o.Observe(int64(stat.TotalConns()), metric.WithAttributes(attribute.String("state", "total")))
+			return nil
+		}),
+	)
+
 	return &PGXStorage{pool: pool}, nil
 }
 
@@ -55,9 +69,8 @@ func migrate(ctx context.Context, pool *pgxpool.Pool) error {
 	return err
 }
 
-func (s *PGXStorage) Save(originalURL string) (string, error) {
+func (s *PGXStorage) Save(ctx context.Context, originalURL string) (string, error) {
 	code := generateCode()
-	ctx := context.Background()
 	_, err := s.pool.Exec(ctx,
 		`INSERT INTO urls (code, original_url) VALUES ($1, $2)`,
 		code, originalURL,
@@ -68,8 +81,7 @@ func (s *PGXStorage) Save(originalURL string) (string, error) {
 	return code, nil
 }
 
-func (s *PGXStorage) Get(code string) (*URLRecord, error) {
-	ctx := context.Background()
+func (s *PGXStorage) Get(ctx context.Context, code string) (*URLRecord, error) {
 	row := s.pool.QueryRow(ctx,
 		`SELECT code, original_url, created_at, clicks FROM urls WHERE code = $1`,
 		code,
@@ -85,12 +97,10 @@ func (s *PGXStorage) Get(code string) (*URLRecord, error) {
 	return &r, nil
 }
 
-func (s *PGXStorage) IncrementClicks(code string) error {
-	ctx := context.Background()
+func (s *PGXStorage) IncrementClicks(ctx context.Context, code string) error {
 	_, err := s.pool.Exec(ctx,
 		`UPDATE urls SET clicks = clicks + 1 WHERE code = $1`,
 		code,
 	)
 	return err
 }
-
