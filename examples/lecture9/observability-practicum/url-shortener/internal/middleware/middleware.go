@@ -3,7 +3,7 @@ package middleware
 import (
 	"log/slog"
 	"net/http"
-	
+
 	"go.opentelemetry.io/otel/trace"
 )
 
