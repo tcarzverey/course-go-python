@@ -1,0 +1,147 @@
+{
+  "title": "URL Shortener — Observability",
+  "uid": "url-shortener-obs",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request Rate (req/s)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps" },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus_uid" },
+          "expr": "rate(otelcol_http_server_request_duration_seconds_count{service_name=\"url-shortener\"}[1m])",
+          "legendFormat": "{{http_request_method}} {{http_route}} → {{http_response_status_code}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Request Latency (s)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": {
+        "defaults": { "unit": "s" },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus_uid" },
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(otelcol_http_server_request_duration_seconds_bucket{service_name=\"url-shortener\"}[1m])))",
+          "legendFormat": "p50"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus_uid" },
+          "expr": "histogram_quantile(0.90, sum by (le) (rate(otelcol_http_server_request_duration_seconds_bucket{service_name=\"url-shortener\"}[1m])))",
+          "legendFormat": "p90"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus_uid" },
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(otelcol_http_server_request_duration_seconds_bucket{service_name=\"url-shortener\"}[1m])))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Error Rate (%)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus_uid" },
+          "expr": "100 * rate(otelcol_http_server_request_duration_seconds_count{service_name=\"url-shortener\", http_response_status_code=~\"5..\"}[5m]) / rate(otelcol_http_server_request_duration_seconds_count{service_name=\"url-shortener\"}[5m])"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "id": 5,
+      "title": "URLs Shortened (total)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 8 },
+      "fieldConfig": {
+        "defaults": { "unit": "short" },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus_uid" },
+          "expr": "sum(otelcol_urls_shortened_total{service_name=\"url-shortener\"})",
+          "legendFormat": "total"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "id": 6,
+      "title": "PG Pool Connections",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 8 },
+      "fieldConfig": {
+        "defaults": { "unit": "short" },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus_uid" },
+          "expr": "otelcol_db_pool_connections{service_name=\"url-shortener\", state=\"total\"}",
+          "legendFormat": "total"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "id": 7,
+      "title": "Redirect Duration",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 12 },
+      "fieldConfig": {
+        "defaults": { "unit": "s" },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus_uid" },
+          "expr": "rate(otelcol_urls_redirect_duration_seconds_sum{service_name=\"url-shortener\"}[1m]) / rate(otelcol_urls_redirect_duration_seconds_count{service_name=\"url-shortener\"}[1m])",
+          "legendFormat": "mean"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus_uid" },
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(otelcol_urls_redirect_duration_seconds_bucket{service_name=\"url-shortener\"}[1m])))",
+          "legendFormat": "p50"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus_uid" },
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(otelcol_urls_redirect_duration_seconds_bucket{service_name=\"url-shortener\"}[1m])))",
+          "legendFormat": "p99"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus_uid" },
+          "expr": "histogram_quantile(1.0, sum by (le) (rate(otelcol_urls_redirect_duration_seconds_bucket{service_name=\"url-shortener\"}[1m])))",
+          "legendFormat": "max"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Logs (url-shortener)",
+      "type": "logs",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 20 },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki_uid" },
+          "expr": "{service_name=\"url-shortener\"}"
+        }
+      ]
+    }
+  ]
+}
